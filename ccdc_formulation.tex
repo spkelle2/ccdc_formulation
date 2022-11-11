@@ -1,0 +1,148 @@
+\documentclass[10pt]{article}
+
+\usepackage{amsmath}
+\usepackage{caption}
+\usepackage{indentfirst}
+\usepackage{subfig}
+\usepackage{wrapfig}
+
+\begin{document}
+	\title{Column Generation Matheuristic For Ammunition Pad Placement}
+	\author{Sean Kelley $^a$ \\
+		$^a$ Department of Industrial and Systems Engineering, Lehigh University}
+	\date{October 28, 2022}
+	\maketitle
+	
+	\section{Introduction}
+	In \cite{ruby}, Ruby details several heuristic and exact ways to find feasible ammunition pad placements for the military under a variety of requirements. For many of the military's needs in placing pads, Ruby's implementations are sufficient. However, under the following conditions, more advanced algorithms are required than Ruby had time for during her Ph.D.:
+	\begin{itemize}
+		\item Placing more than 40 pads at once
+		\item Placing a combination of barricaded and unbarricaded pads simultaneously
+	\end{itemize}
+	In this document, we will detail a column generation matheuristic to address the above conditions simultaneously. Before diving into that though, we will review the problem formulation at hand, how it can be converted to a formulation that can use column generation, and how column generation works in general.
+	
+	\section{Explicit MIP Formulation}
+	The following can be used to describe the pad placement problem. It uses similar albeit consolidated notation from Ruby's thesis. For more details, see \cite{ruby}.
+
+	\subsection{Sets}
+	\begin{itemize}
+		\item $\mathcal{S}$ is the set of potential pad locations.
+		\item $\mathcal{K}$ is the set of ammunition pads.
+		\item $\Psi_i$ is the set of ammunition pad settings at location $ i $. Settings can include unbarricaded or any orientation while barricaded. If access roads are provided, orientations are restricted to an unbarricaded side facing the road.
+		\item $\Psi_i' \subseteq \Psi_i$ is the set of ammunition pad settings at location $ i $ including barricades.
+		\item $ \mathcal{B}_{i\psi}^{k} $ is the set of pad location and setting pairs in the blast zone of pad $ k $ at location $ i $ with setting $ \psi $. 
+	\end{itemize}
+	
+	\subsection{Parameters}
+	\begin{itemize}
+		\item $d_{ij}$ is the distance between pads $ i $ and $ j $.
+		\item $\text{IBD}^k$ inhabited building distance for pad $ k $.
+		\item $\text{PTR}^k$ is public transportation road distance for pad $ k $.
+		\item $ r_i^b $ is distance to closest inhabited building.
+		\item $ r_i^r $ is distance to closest public transport road.
+		\item $ b $ is maximum number of barricaded pads.
+		\item $ X_i $ is the latitudinal distance from the squeeze point of the layout for location $ i $.
+		\item $ Y_i $ is the longitudinal distance from the squeeze point of the layout for location $ i $.
+	\end{itemize}
+	
+	\subsection{Variables}
+	\begin{itemize}
+		\item $z_{i\psi}^{k} $ represents if pad $ k $ is placed at location $ i $ with setting $ \psi $.
+		\item $ w_{ij} $ distance between locations $ i $ and $ j $ if both are chosen for placing pads.
+	\end{itemize}
+
+	\subsection{Constraints}
+	\noindent The following constraints ensure feasible pad layouts for a variety of military requirements.
+	\begin{alignat}{2}
+		\intertext{Ammunition pads must be sufficiently far from public roads or inhabited buildings.}
+		\sum_{k \in \mathcal{K}} \text{IBD}^k z_{i\psi}^{k} \leq r_i^b & \qquad \forall i \in \mathcal{S}, \; \forall \psi \in \Psi_i \label{IBD} \\
+		\sum_{k \in \mathcal{K}} \text{PTR}^k z_{i\psi}^{k} \leq r_i^r & \qquad \forall i \in \mathcal{S}, \; \forall \psi \in \Psi_i \label{PTR}
+		\intertext{Ammunition pads must be sufficiently far from each other.}
+		z_{i\psi}^{k} + \sum_{l \in \mathcal{K}} z_{j\phi}^{l} \leq 1 & \qquad \forall i, j \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \psi \in \Psi_i, \; \forall \phi \in \Psi_j \; : \; (j, \phi) \in \mathcal{B}_{i\psi}^{k} \label{IMD}
+		\intertext{A weaker relaxation but fewer constraints can express this as:}
+		\sum_{k' \in \mathcal{K}} \sum_{(j, \psi') \in \mathcal{B}_{i, \psi}^k} z_{j, \psi'}^{k'} + Mz_{i\psi}^k \label{IMD'}
+		\intertext{All pads must be placed.}
+		\sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i} z_{i\psi}^{k} = 1 & \qquad \forall k \in \mathcal{K} \label{pads}
+		\intertext{Only so many pads can be barricaded.}
+		\sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i'} \sum_{k \in \mathcal{K}} z_{i\psi}^{k} \leq b & \qquad \label{barricades}
+		\intertext{Pad placements are binary decisions.}
+		z_{i\psi}^{k} \in \{0, 1\} & \qquad \forall i \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \psi \in \Psi_i \label{z}
+		\intertext{Distance between chosen pads.}
+		w_{ij} \leq \sum_{\psi \in \Psi_i} \sum_{k \in \mathcal{K}} z_{i\psi}^k d_{ij} & \qquad \forall i, j \in \mathcal{S} \\
+		w_{ij} \leq \sum_{\psi \in \Psi_j} \sum_{k \in \mathcal{K}} z_{j\psi}^k d_{ij} & \qquad \forall i, j \in \mathcal{S}
+	\end{alignat}
+	
+	
+	\subsection{Objectives}
+  	\begin{align}
+  		\intertext{Maximize distance between pads.}
+  		\text{maximize } \sum_{i \in \mathcal{S}} \sum_{j \in \mathcal{S}} w_{ij} \label{spread}
+  		\intertext{Minimize distance between pads.}
+  		\text{minimize } \sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i} \sum_{k \in \mathcal{K}} (X_i + Y_i) z_{i\psi}^k  \label{squeeze}
+  	\end{align}
+
+  	\section{Column Generation Formulation}
+  	The idea for column generation is to decompose the problem into a master problem and a pricing problem. The former will contain constraints that sum over the set of pads $ \mathcal{K} $ and the latter will contain the constraints that are repeated for each pad in the set $ \mathcal{K} $, albeit, they are reduced to finding single pad. With this separation, both problems can be substantially smaller than the explicit formulation, and performance advantages can be found by using the latter to generate columns to use in the former.
+  
+	\subsection{Master Problem Formulation}
+	The master problem takes the formulation of a Set Covering Problem. It is defined as follows:
+	
+	\subsubsection{Sets}
+	\begin{itemize}
+		\item $\mathcal{\Omega}$ is the set of all possible positionings for all pads
+		\item $\mathcal{K}$ is the set of ammunition pads.
+		\item $\Psi_i$ is the set of ammunition pad settings at location $ i $. Settings can include unbarricaded or any orientation while barricaded. If access roads are provided, orientations are restricted to an unbarricaded side facing the road.
+		\item $\Psi_i' \subseteq \Psi_i$ is the set of ammunition pad settings at location $ i $ including barricades.
+		\item $ \mathcal{B}_{i\psi}^{k} $ is the set of pad location and setting pairs in the blast zone of pad $ k $ at location $ i $ with setting $ \psi $. 
+	\end{itemize}
+	
+	\subsubsection{Parameters}
+	\begin{itemize}
+		\item $d_{ij}$ is the distance between pads $ i $ and $ j $.
+		\item $ b $ is maximum number of barricaded pads.
+		\item $ X_i $ is the latitudinal distance from the squeeze point of the layout for location $ i $.
+		\item $ Y_i $ is the longitudinal distance from the squeeze point of the layout for location $ i $.
+	\end{itemize}
+	
+	\subsubsection{Variables}
+	\begin{itemize}
+		\item $z_{i\psi}^{k} $ represents if pad $ k $ is placed at location $ i $ with setting $ \psi $.
+		\item $ w_{ij} $ distance between locations $ i $ and $ j $ if both are chosen for placing pads.
+	\end{itemize}
+	
+	\subsubsection{Constraints}
+	\noindent The following constraints ensure feasible pad layouts for a variety of military requirements.
+	\begin{alignat}{2}
+		\intertext{Ammunition pads must be sufficiently far from each other.}
+		z_{i\psi}^{k} + \sum_{l \in \mathcal{K}} z_{j\phi}^{l} \leq 1 & \qquad \forall i, j \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \psi \in \Psi_i, \; \forall (j, \phi) \in \mathcal{B}_{i\psi}^{k} \label{IMD}
+		\intertext{All pads must be placed.}
+		\sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i} z_{i\psi}^{k} = 1 & \qquad \forall k \in \mathcal{K} \label{pads}
+		\intertext{Only so many pads can be barricaded.}
+		\sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i'} \sum_{k \in \mathcal{K}} z_{i\psi}^{k} \leq b & \qquad \label{barricades}
+		\intertext{Pad placements are binary decisions.}
+		z_{i\psi}^{k} \in \{0, 1\} & \qquad \forall i \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \psi \in \Psi_i \label{z}
+		\intertext{Distance between chosen pads.}
+		w_{ij} \leq \sum_{\psi \in \Psi_i} \sum_{k \in \mathcal{K}} z_{i\psi}^k d_{ij} & \qquad \forall i, j \in \mathcal{S}
+	\end{alignat}
+	
+	
+	\subsubsection{Objectives}
+	\begin{align}
+		\intertext{Maximize distance between pads.}
+		\text{maximize } \sum_{i \in \mathcal{S}} \sum_{j \in \mathcal{S}} w_{ij} \label{spread}
+		\intertext{Minimize distance between pads.}
+		\text{minimize } \sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i} \sum_{k \in \mathcal{K}} (X_i + Y_i) z_{i\psi}^k  \label{squeeze}
+	\end{align}
+	
+	\subsection{Master Problem LP Relaxation Dual Formulation}
+	
+	\subsection{Pricing Problem Formulation}
+	
+	\section{A Pad Placement Matheuristic}
+	
+	\newpage
+	
+	\bibliographystyle{plainurl}
+	\bibliography{reference}
+
+\end{document}
