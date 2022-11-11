@@ -1,18 +1,21 @@
 \documentclass[10pt]{article}
 
-\usepackage{amsmath}
+\usepackage{amsmath, color}
 \usepackage{caption}
 \usepackage{indentfirst}
 \usepackage{subfig}
 \usepackage{wrapfig}
 
+\newcommand{\luiscomm}[1]{{\color{magenta} #1}}
+
 \begin{document}
 	\title{Column Generation Matheuristic For Ammunition Pad Placement}
-	\author{Sean Kelley $^a$ \\
+	\author{Sean Kelley, Luis Zuluaga $^a$ \\
 		$^a$ Department of Industrial and Systems Engineering, Lehigh University}
-	\date{October 28, 2022}
+	\date{November 4, 2022}
 	\maketitle
-	
+
+\luiscomm{(Avoid using your sty files, instead	 copy what is necessary so it can be compiled w/o non-standard sty files. Overleaf is another option, but not my favorite! :o) )}
 	\section{Introduction}
 	In \cite{ruby}, Ruby details several heuristic and exact ways to find feasible ammunition pad placements for the military under a variety of requirements. For many of the military's needs in placing pads, Ruby's implementations are sufficient. However, under the following conditions, more advanced algorithms are required than Ruby had time for during her Ph.D.:
 	\begin{itemize}
@@ -28,59 +31,131 @@
 	\begin{itemize}
 		\item $\mathcal{S}$ is the set of potential pad locations.
 		\item $\mathcal{K}$ is the set of ammunition pads.
-		\item $\Psi_i$ is the set of ammunition pad settings at location $ i $. Settings can include unbarricaded or any orientation while barricaded. If access roads are provided, orientations are restricted to an unbarricaded side facing the road.
-		\item $\Psi_i' \subseteq \Psi_i$ is the set of ammunition pad settings at location $ i $ including barricades.
-		\item $ \mathcal{B}_{i\psi}^{k} $ is the set of pad location and setting pairs in the blast zone of pad $ k $ at location $ i $ with setting $ \psi $. 
+		\item $\Gamma_i$ is the set of ammunition pad settings at location $ i \in \mathcal{S}$. Settings can include only unbarricaded ($\Gamma_i = \{0\}$) or unbarricated and any orientation while barricaded (e.g., $\Gamma_i = \{0, 0^o, 90^o, 180^o, 270^o\}$) . If access roads are provided, orientations are restricted to an unbarricaded side facing the road (e.g., $\Gamma_i = \{0, \text{towards road}^o\}$).
+		\item $\Gamma_i \setminus \{0\}$ indicates the set of barricade ammunition pad settings at location $i \in \mathcal{S}$.
+		\item $ \mathcal{B}_{i\gamma}^{k} $ is the set of pad location and setting pairs in the blast zone of pad $ k \in \mathcal{K}$ at location $ i \in \mathcal{S}$ with setting $ \gamma \in \Gamma $. 
 	\end{itemize}
 	
 	\subsection{Parameters}
 	\begin{itemize}
-		\item $d_{ij}$ is the distance between pads $ i $ and $ j $.
-		\item $\text{IBD}^k$ inhabited building distance for pad $ k $.
-		\item $\text{PTR}^k$ is public transportation road distance for pad $ k $.
-		\item $ r_i^b $ is distance to closest inhabited building.
-		\item $ r_i^r $ is distance to closest public transport road.
-		\item $ b $ is maximum number of barricaded pads.
-		\item $ X_i $ is the latitudinal distance from the squeeze point of the layout for location $ i $.
-		\item $ Y_i $ is the longitudinal distance from the squeeze point of the layout for location $ i $.
+		\item $d_{ij}$ is the (Euclidean) distance between locations $ i \in \mathcal{S}$ and $ j \in \mathcal{S}$, $j> i$ \luiscomm{(I imagine we are not computing all the $\mathcal{S} \times \mathcal{S}$ distances but instead ``half'' of them)}.
+		\item $\text{IBD}^k$ inhabited building distance for pad $ k \in \mathcal{K}$.
+		\item $\text{PTR}^k$ is public transportation road distance for pad $ k \in \mathcal{K}$.
+		\item $ RB_i $ is distance to closest inhabited building of location $i \in \mathcal{S}$.
+		\item $ RR_i $ is distance to closest public transport road of location $i \in \mathcal{S}$.
+		\item $ B $ is maximum number of barricaded pads.
+		\item $ X_i $ is the latitudinal position from the squeeze point of the layout for location $ i $ \luiscomm{(which is the squeeze point?)}.
+		\item $ Y_i $ is the longitudinal position from the squeeze point of the layout for location $ i $.
 	\end{itemize}
 	
 	\subsection{Variables}
 	\begin{itemize}
-		\item $z_{i\psi}^{k} $ represents if pad $ k $ is placed at location $ i $ with setting $ \psi $.
-		\item $ w_{ij} $ distance between locations $ i $ and $ j $ if both are chosen for placing pads.
+		\item $z_{i\gamma}^{k} $ represents if pad $ k  \in \mathcal{K}$  with setting $ \gamma \in \Gamma_i$ is placed at location $ i \in \mathcal{S}$.
+		\item $ w_{ij} $ distance between locations $ i \in \mathcal{S}$ and $ j\in \mathcal{S}$ if both position $i$ and position $j$ are chosen for placing pads ($w_{ij} = 0$ otherwise).
 	\end{itemize}
 
 	\subsection{Constraints}
 	\noindent The following constraints ensure feasible pad layouts for a variety of military requirements.
 	\begin{alignat}{2}
 		\intertext{Ammunition pads must be sufficiently far from public roads or inhabited buildings.}
-		\sum_{k \in \mathcal{K}} \text{IBD}^k z_{i\psi}^{k} \leq r_i^b & \qquad \forall i \in \mathcal{S}, \; \forall \psi \in \Psi_i \label{IBD} \\
-		\sum_{k \in \mathcal{K}} \text{PTR}^k z_{i\psi}^{k} \leq r_i^r & \qquad \forall i \in \mathcal{S}, \; \forall \psi \in \Psi_i \label{PTR}
+		\sum_{k \in \mathcal{K}} \text{IBD}^k z_{i\gamma}^{k} \leq RB_i & \qquad \forall i \in \mathcal{S}, \; \forall \gamma \in \Gamma_i \label{IBD} \\
+		\sum_{k \in \mathcal{K}} \text{PTR}^k z_{i\gamma}^{k} \leq RR_i & \qquad \forall i \in \mathcal{S}, \; \forall \gamma \in \Gamma_i \label{PTR}		
+		\intertext{\luiscomm{(Note that the above constraints mean that we are not using the barricade setting, or even the fact that the pad might be barricated to reduce the distance to inhabited buildings or public transport road. Can we do it? Not sure how. Is it worth it? I imagine yes, barricade pads can be located closer to buildings and roads, no?)}}		
 		\intertext{Ammunition pads must be sufficiently far from each other.}
-		z_{i\psi}^{k} + \sum_{l \in \mathcal{K}} z_{j\phi}^{l} \leq 1 & \qquad \forall i, j \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \psi \in \Psi_i, \; \forall \phi \in \Psi_j \; : \; (j, \phi) \in \mathcal{B}_{i\psi}^{k} \label{IMD}
-		\intertext{A weaker relaxation but fewer constraints can express this as:}
-		\sum_{k' \in \mathcal{K}} \sum_{(j, \psi') \in \mathcal{B}_{i, \psi}^k} z_{j, \psi'}^{k'} + Mz_{i\psi}^k \label{IMD'}
+		z_{i\gamma}^{k} + \sum_{k' \in \mathcal{K}} z_{j\gamma}^{k'} \leq 1 & \qquad \forall i \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \gamma \in \Gamma_i, \;  j \in \mathcal{S}\;\gamma' \in \Gamma_j \; : \; (j, \gamma') \in \mathcal{B}_{i\gamma}^{k} \label{IMD}
+		\intertext{\luiscomm{(Here we are taking into account the barricade setting to set distance to a near pad)}}
 		\intertext{All pads must be placed.}
-		\sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i} z_{i\psi}^{k} = 1 & \qquad \forall k \in \mathcal{K} \label{pads}
+		\sum_{i \in \mathcal{S}} \sum_{\gamma \in \Gamma_i} z_{i\gamma}^{k} = 1 & \qquad \forall k \in \mathcal{K} \label{pads}
 		\intertext{Only so many pads can be barricaded.}
-		\sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i'} \sum_{k \in \mathcal{K}} z_{i\psi}^{k} \leq b & \qquad \label{barricades}
+		\sum_{i \in \mathcal{S}} \sum_{\gamma \in \Gamma_i \setminus \{0\}} \sum_{k \in \mathcal{K}} z_{i\gamma}^{k} \leq B & \qquad \label{barricades}
 		\intertext{Pad placements are binary decisions.}
-		z_{i\psi}^{k} \in \{0, 1\} & \qquad \forall i \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \psi \in \Psi_i \label{z}
-		\intertext{Distance between chosen pads.}
-		w_{ij} \leq \sum_{\psi \in \Psi_i} \sum_{k \in \mathcal{K}} z_{i\psi}^k d_{ij} & \qquad \forall i, j \in \mathcal{S} \\
-		w_{ij} \leq \sum_{\psi \in \Psi_j} \sum_{k \in \mathcal{K}} z_{j\psi}^k d_{ij} & \qquad \forall i, j \in \mathcal{S}
+		z_{i\gamma}^{k} \in \{0, 1\} & \qquad \forall i \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \gamma \in \Gamma_i \label{z}
+		\intertext{Distance between chosen pads. Specifically these constraints ensure that if pads are located both at position $i \in \mathcal{S}$ and position $j \in \mathcal{S}$, $w_{ij} \le d_{ij}$, otherwise $w_{ij} \le 0$ (which with maximization objective implies that $w_{ij} = 0$)}
+		w_{ij} \leq \sum_{\gamma \in \Gamma_i} \sum_{k \in \mathcal{K}} z_{i\gamma}^k d_{ij} & \qquad \forall i, j, j\neq i \in \mathcal{S} \\
+		w_{ij} \leq \sum_{\gamma \in \Gamma_j} \sum_{k \in \mathcal{K}} z_{j\gamma}^k d_{ij} & \qquad \forall i, j, j\neq i \in \mathcal{S}
 	\end{alignat}
 	
 	
 	\subsection{Objectives}
   	\begin{align}
   		\intertext{Maximize distance between pads.}
-  		\text{maximize } \sum_{i \in \mathcal{S}} \sum_{j \in \mathcal{S}} w_{ij} \label{spread}
-  		\intertext{Minimize distance between pads.}
+  		\text{maximize } \frac{1}{2} \sum_{i \in \mathcal{S}} \sum_{j \in \mathcal{S}} w_{ij} \label{spread}
+  		\intertext{Minimize a {\bf proxy} to the distance between pads.}
+  		\text{minimize } \sum_{i \in \mathcal{S}} \sum_{\gamma \in \Gamma_i} \sum_{k \in \mathcal{K}} (X_i + Y_i) z_{i\gamma}^k  \label{squeeze}
+		\intertext{Namely, we are minimizing the total taxi ($l_1$- norm distance) of all the locations with pads to the squeeze point.}
+  	\end{align}
+\newpage
+\section{Reduced formulation}
+{\bf Idea}: The main variables are $z^k_{i\gamma}$ for $i \in \mathcal{S}$, $k \in \mathcal{K}$, $\gamma \in \Gamma_i$. This means number of variables of the order of $|\mathcal{S}||\mathcal{K}|\max\{|\Gamma_i|: i \in \mathcal{S}\}$. This also means that many groups of constraints are of the order $|\mathcal{S}||\mathcal{K}|\max\{|\Gamma_i|: i \in \mathcal{S}\}$ or even $(|\mathcal{S}||\mathcal{K}|\max\{|\Gamma_i|: i \in \mathcal{S}\})^2$.
+
+The number of variables and constraints would be greatly reduced if instead we can separate the $\gamma \in \Gamma_i$ index from the $i \in \mathcal{S}$. Which in principle cannot be done because $\Gamma_i$ depends on $i$.
+
+Thus, we begin by assuming that $\Gamma_i = \Gamma$ for all $i \in \mathcal{S}$; that is, in all locations you can use all the available barricade settings. The only problem in doing this, is that locations $i \in \mathcal{S}$ that are right by a road, are not restricted to be barricated with the opening facing the road if they are barricated at all. 
+
+For now, let's assume this is an issue that could be ``repared'' postprocessing. That is, if a pad is located near a road with the barricade opening not facing the road, we ``just'' change the direction of the barricade entrance.
+
+Then:
+
+\subsection{Sets (only the ones that change)}
+\begin{itemize}
+\item $\Gamma$ is the set of ammunition pad settings {\bf at any location} $ i \in \mathcal{S}$. Settings can include only unbarricaded ($\Gamma = \{0\}$) or unbarricated and any orientation while barricaded (e.g., $\Gamma = \{0, 0^o, 90^o, 180^o, 270^o\}$) . \end{itemize}
+
+\subsection{Parameters (same as before)}
+
+\subsection{Variables}
+\begin{itemize}
+		\item $z_{i}^{k} $ represents if pad $ k  \in \mathcal{K}$   is placed at location $ i \in \mathcal{S}$.
+		\item $z_{\gamma}^{k} $ represents if pad $ k  \in \mathcal{K}$  is set with setting $ \gamma \in \Gamma$.
+		\item $ w_{ij} $ distance between locations $ i \in \mathcal{S}$ and $ j\in \mathcal{S}, j > i$ ($j > i$ to take advantage of symmetry) if both position $i$ and position $j$ are chosen for placing pads ($w_{ij} = 0$ otherwise).
+	\end{itemize}
+	\luiscomm{(Much less variables)}
+\subsection{Constraints}
+	\noindent The following constraints ensure feasible pad layouts for a variety of military requirements.
+	\begin{alignat}{2}
+		\intertext{Ammunition pads must be sufficiently far from public roads or inhabited buildings.}
+		\sum_{k \in \mathcal{K}} \text{IBD}^k z_{i}^{k} \leq RB_i & \qquad \forall i \in \mathcal{S}, \label{IBD} \\
+		\sum_{k \in \mathcal{K}} \text{PTR}^k z_{i}^{k} \leq RR_i & \qquad \forall i \in \mathcal{S},  \label{PTR}		
+		\intertext{\luiscomm{(The $\gamma \in \Gamma$ for these constraints was not really being used before anyways... much less constraints)}}		
+		\intertext{The following is one of the key constraints that ``required'' the $z^k_{i\gamma}$. Ammunition pads must be sufficiently far from each other. \luiscomm{(Is this correct?)}}
+		(z_{i}^{k} + z_{\gamma}^{k})+ \sum_{k' \in \mathcal{K}} 
+		(z_{j}^{k'} + z_{\gamma'}^{k}) \leq 3 
+		& \qquad \forall i \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \gamma \in \Gamma, \; : \; (j, \gamma') \in \mathcal{B}_{i\gamma}^{k} \label{IMD}
+		\intertext{\luiscomm{(To see that it works, notice that $\sum_{k' \in \mathcal{K}} 
+		(z_{j}^{k'} + z_{\gamma'}^{k}) \le 2$. Thus, constraint can only be violated if pad $k$ is in location $i$ in barricade setting $\gamma$ {\bf and} a pad is located in position $j$ in barricade setting $\gamma'$ that is prohibited by the set $\mathcal{B}_{i\gamma}^{k}$. Thus constraint does what we want. No reduction in number of constraints here.)}}
+		\intertext{All pads must be placed and all pads should have a configuration setting.}
+		\sum_{i \in \mathcal{S}} z_{i}^{k} = 1 & \qquad \forall k \in \mathcal{K} \label{pads1}\\
+		\sum_{\gamma \in \Gamma} z_{\gamma}^{k} = 1 & \qquad \forall k \in \mathcal{K}  \label{pads2} \\
+		\intertext{\luiscomm{(constraint is simplified)}}
+		\intertext{Only so many pads can be barricaded.}
+		\sum_{\gamma \in \Gamma \setminus \{0\}} \sum_{k \in \mathcal{K}} z_{\gamma}^{k} \leq B & \qquad \label{barricades}
+		\intertext{\luiscomm{(constraint is simplified)}}
+		\intertext{Pad placements are binary decisions.}
+		z_{i}^{k}, z_{\gamma}^{k} \in \{0, 1\} & \qquad \forall i \in \mathcal{S}, \; \forall k \in \mathcal{K}, \; \forall \gamma \in \Gamma \label{z}
+		\intertext{Distance between chosen pads. Specifically these constraints ensure that if pads are located both at position $i \in \mathcal{S}$ and position $j \in \mathcal{S}$, $w_{ij} \le d_{ij}$, otherwise $w_{ij} \le 0$ (which with maximization objective implies that $w_{ij} = 0$)}
+		w_{ij} \leq  \sum_{k \in \mathcal{K}} z_{i}^k d_{ij} & \qquad \forall i, j, j> i \in \mathcal{S} \\
+		w_{ij} \leq \sum_{k \in \mathcal{K}} z_{j}^k d_{ij} & \qquad \forall i, j, j> i \in \mathcal{S}
+		\intertext{\luiscomm{(constraint is simplified)}}
+		\intertext{\luiscomm{(It would be nice if we can do this with $w_{kk'}$ for all $k \in \mathcal{K}$ and $k' > k \in \mathcal{K}$ to reduce variables, but it will provably require using taxi distance instead of the Euclidean distance $d_{ij}$}}
+		\intertext{The only issue remaining is how to properly align barricated pads that face a road. What about \luiscomm{(please check)}}
+		\sum_{\gamma \in \Gamma \setminus \{0, \text{aligned($i$)}^o\}} z^k_\gamma \le 1 - z_i^k & \qquad \forall k \in \mathcal{K}, i \in \mathcal{S}(\text{road})
+		\intertext{Where aligned($i$)$^o$ is the angle at which a barricated pad must be located for all $i \in \mathcal{S}(\text{road})$, where $\mathcal{S}(\text{road})$ represents the set of points $i \in \mathcal{S}$ that are close enough to a road to have the barricated angle entrance restriction.}
+	\end{alignat}
+	
+	
+	\subsection{Objectives}
+  	\begin{align}
+  		\intertext{Maximize distance between pads.}
+  		\text{maximize }  \sum_{i \in \mathcal{S}} \sum_{j \in \mathcal{S}} w_{ij} \label{spread}
+  		\intertext{Minimize a proxy to the distance between pads.}
   		\text{minimize } \sum_{i \in \mathcal{S}} \sum_{\psi \in \Psi_i} \sum_{k \in \mathcal{K}} (X_i + Y_i) z_{i\psi}^k  \label{squeeze}
+		\intertext{Namely, we are minimizing the total taxi ($l_1$- norm distance) of all the locations with pads to the squeeze point.}
   	\end{align}
 
+
+
+ 
+
+\newpage
   	\section{Column Generation Formulation}
   	The idea for column generation is to decompose the problem into a master problem and a pricing problem. The former will contain constraints that sum over the set of pads $ \mathcal{K} $ and the latter will contain the constraints that are repeated for each pad in the set $ \mathcal{K} $, albeit, they are reduced to finding single pad. With this separation, both problems can be substantially smaller than the explicit formulation, and performance advantages can be found by using the latter to generate columns to use in the former.
   
